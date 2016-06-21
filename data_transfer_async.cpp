@@ -4,9 +4,9 @@
 
 namespace amp = Concurrency;
 
-
 int main(int argc, char ** argv)
 {
+    // [buffer size buffer size]
 	const int size = 50, buffer = 1;
 	amp::accelerator default_acc;
 	amp::accelerator_view acc_view = default_acc.get_default_view();
@@ -19,7 +19,15 @@ int main(int argc, char ** argv)
 
 	// Copy from host to device
 	auto data_view = device_data.section(amp::index<1>(buffer), amp::extent<1>(size));
-	amp::copy(host_data + buffer, host_data + size + buffer, data_view);
+	auto marker = amp::copy_async(host_data + buffer, host_data + size + buffer, data_view);
+	auto marker2 = acc_view.create_marker();
+	
+    // 1. Wait for marker - doesn't work
+    //marker2.get();
+    // 2. Wait for work currently put in accelerator queue - doesn't work
+    //acc_view.wait();
+    // 3. Wait for data transfer
+    marker.get();
 
 	// Copy on device between
 	amp::parallel_for_each(amp::extent<1>(size), 
@@ -32,7 +40,9 @@ int main(int argc, char ** argv)
 
 	// Copy from device to host
 	data_view = device_data.section(amp::index<1>(size + buffer*2), amp::extent<1>(size));
-	amp::copy(data_view, host_data + size + buffer*2);
+	auto copy_future = amp::copy_async(data_view, host_data + size + buffer*2);
+	//acc_view.wait();
+    copy_future.get();
 
 	// Check correctness
 	for(int i = 0; i < size; ++i) {
