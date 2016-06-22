@@ -42,7 +42,7 @@ private:
 };
 
 template<typename T, typename... Args>
-void construct(amp::array<T> & device_data, const Args &... args)
+void construct(amp::array<T> & device_data, Args &&... args)
 {
     amp::parallel_for_each(device_data.get_extent(),
         [=, &device_data](amp::index<1> idx) restrict(amp) {
@@ -64,7 +64,7 @@ int main(int argc, char ** argv)
     std::string s = "abc";
     param r{1, 3.0};
 
-    construct(device_data, val, r); 
+    construct(device_data, val, std::move(r)); 
 
     amp::array_view<specific_data> data_view(device_data);
     for(int i = 0; i < size; ++i)
