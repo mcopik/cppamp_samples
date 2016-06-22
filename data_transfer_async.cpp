@@ -41,7 +41,6 @@ int main(int argc, char ** argv)
 	// Copy from device to host
 	data_view = device_data.section(amp::index<1>(size + buffer*2), amp::extent<1>(size));
 	auto copy_future = amp::copy_async(data_view, host_data + size + buffer*2);
-	//acc_view.wait();
     copy_future.get();
 
 	// Check correctness
