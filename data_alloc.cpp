@@ -4,6 +4,12 @@
 
 namespace amp = Concurrency;
 
+struct param
+{
+    int some_value;
+    float other_val;
+};
+
 struct specific_data
 {
     specific_data() restrict(amp, cpu)
@@ -15,6 +21,11 @@ struct specific_data
     {
         x_ = 1.0;
     }
+
+    specific_data(int val, const param & param_value) restrict(amp,cpu)
+    {
+        x_ = val + param_value.some_value; 
+    }   
 
     ~specific_data() restrict(amp, cpu)
     {
@@ -38,9 +49,13 @@ int main(int argc, char ** argv)
 	amp::array<specific_data> device_data(amp::extent<1>(size), acc_view);
 	std::wcout << "Using device: " << default_acc.get_description() << std::endl;
 
+    int val = 3.0;
+    std::string s = "abc";
+    param r{1, 3.0};
+
     amp::parallel_for_each(device_data.get_extent(),
         [=, &device_data](amp::index<1> idx) restrict(amp) {
-            new (&device_data[ idx[0] ]) specific_data(3.0);
+            new (&device_data[ idx[0] ]) specific_data(val, r);
             device_data[ idx[0] ].x()++;
         }
     );
