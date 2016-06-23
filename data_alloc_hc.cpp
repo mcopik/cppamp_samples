@@ -32,7 +32,7 @@ struct specific_data
 
     }
 
-    [[hc]] int& x()
+    [[hc, cpu]] int& x()
     {
         return x_;
     }
@@ -80,18 +80,13 @@ int main(int argc, char ** argv)
     acc_view.wait();
 
     { 
-    //    amp::array_view<specific_data> data_view(device_data);
-    //for(int i = 0; i < size; ++i)
-    //   assert(data_view[i].x() == val + r.some_value + 1);
+        amp::array_view<specific_data> data_view(device_data);
+        //for(int i = 0; i < size; ++i)
+         //   assert(data_view[i].x() == val + r.some_value + 1);
     }
 
     destruct(device_data);	
  
-/*    amp::parallel_for_each(amp::extent<1>(50),
-        [&device_data](amp::index<1> idx) restrict(amp) {
-            device_data[ idx[0] ].~specific_data(); 
-        }
-    );*/
     acc_view.wait(); 
 
     return 0;
