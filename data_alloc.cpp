@@ -44,10 +44,22 @@ private:
 template<typename T, typename... Args>
 void construct(amp::array<T> & device_data, Args &&... args)
 {
+    std::tuple<amp::array<T>> data{device_data};
     amp::parallel_for_each(device_data.get_extent(),
-        [=, &device_data](amp::index<1> idx) restrict(amp) {
-            new (&device_data[ idx[0] ]) T(args...);
-            device_data[ idx[0] ].x()++;
+        [=, &data](amp::index<1> idx) restrict(amp) {
+            new (&std::get<0>(data)[ idx[0] ]) T(args...);
+            std::get<0>(data)[ idx[0] ].x()++;
+        }
+    );
+}
+
+
+template<typename T>
+void destruct(amp::array<T> & device_data)
+{
+    amp::parallel_for_each(amp::extent<1>(50),
+        [&device_data](amp::index<1> idx) restrict(amp) {
+            device_data[ idx[0] ].~T(); 
         }
     );
 }
@@ -65,9 +77,16 @@ int main(int argc, char ** argv)
     param r{1, 3.0};
 
     construct(device_data, val, std::move(r)); 
+    acc_view.wait();
 
-    amp::array_view<specific_data> data_view(device_data);
-    for(int i = 0; i < size; ++i)
-        assert(data_view[i].x() == val + r.some_value + 1);
-	return 0;
+    { 
+    //amp::array_view<specific_data> data_view(device_data);
+    //for(int i = 0; i < size; ++i)
+     //   assert(data_view[i].x() == val + r.some_value + 1);
+    }
+
+    destruct(device_data);	
+    acc_view.wait(); 
+
+    return 0;
 }
