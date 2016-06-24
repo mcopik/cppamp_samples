@@ -1,8 +1,8 @@
 #include <iostream>
 
-#include <amp.h>
+#include <hc.hpp>
 
-namespace amp = Concurrency;
+namespace amp = hc;
 
 struct param
 {
@@ -12,27 +12,27 @@ struct param
 
 struct specific_data
 {
-    specific_data() restrict(amp, cpu)
+    [[hc]] specific_data() 
     {
         x_ = 2.0;
     }
 
-    specific_data(int val, const std::string &) restrict(amp, cpu)
+    [[hc]] specific_data(int val, const std::string &) 
     {
         x_ = 1.0;
     }
 
-    specific_data(int val, const param & param_value) restrict(amp,cpu)
+    [[hc]] specific_data(int val, const param & param_value)
     {
         x_ = val + param_value.some_value; 
     }  
 
-    ~specific_data() restrict(amp, cpu)
+    [[hc]] ~specific_data()
     {
 
     }
 
-    int& x() restrict(amp, cpu)
+    [[hc]] int& x()
     {
         return x_;
     }
@@ -46,7 +46,7 @@ void construct(amp::array<T> & device_data, Args &&... args)
 {
     std::tuple<amp::array<T>> data{device_data};
     amp::parallel_for_each(device_data.get_extent(),
-        [=, &data](amp::index<1> idx) restrict(amp) {
+        [=, &data](amp::index<1> idx) [[hc]] {
             new (&std::get<0>(data)[ idx[0] ]) T(args...);
             std::get<0>(data)[ idx[0] ].x()++;
         }
@@ -57,8 +57,8 @@ void construct(amp::array<T> & device_data, Args &&... args)
 template<typename T>
 void destruct(amp::array<T> & device_data)
 {
-    amp::parallel_for_each(amp::extent<1>(50),
-        [&device_data](amp::index<1> idx) restrict(amp) {
+    amp::parallel_for_each(device_data.get_extent(),
+        [&device_data](amp::index<1> idx) [[hc]]  {
             device_data[ idx[0] ].~T(); 
         }
     );
@@ -80,12 +80,18 @@ int main(int argc, char ** argv)
     acc_view.wait();
 
     { 
-    //amp::array_view<specific_data> data_view(device_data);
+    //    amp::array_view<specific_data> data_view(device_data);
     //for(int i = 0; i < size; ++i)
-     //   assert(data_view[i].x() == val + r.some_value + 1);
+    //   assert(data_view[i].x() == val + r.some_value + 1);
     }
 
     destruct(device_data);	
+ 
+/*    amp::parallel_for_each(amp::extent<1>(50),
+        [&device_data](amp::index<1> idx) restrict(amp) {
+            device_data[ idx[0] ].~specific_data(); 
+        }
+    );*/
     acc_view.wait(); 
 
     return 0;
