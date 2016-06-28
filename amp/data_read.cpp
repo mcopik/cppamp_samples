@@ -4,6 +4,40 @@
 #include <amp.h>
 
 namespace amp = Concurrency;
+
+template<typename T>
+struct copy_accessor
+{
+    copy_accessor(amp::array<T> & data) : data(data)
+    {}
+
+    void read_write(const uint32_t pos, T val)
+    {
+        write(pos, val);
+        double new_val = read(pos);
+        assert( val == new_val );
+    }
+
+    void write(const uint32_t pos, T val)
+    {
+        auto dest = data.section( amp::index<1>(pos), amp::extent<1>(1) );
+        auto fut = amp::copy_async(&val, &val + 1, dest);
+        fut.get();
+    }
+
+    T read(const uint32_t pos)
+    {
+        T tmp;
+        auto src = data.section( amp::index<1>(pos), amp::extent<1>(1) );
+        auto fut = amp::copy_async(src, &tmp);
+        fut.get();
+        return tmp;
+    }
+
+private:
+    amp::array<T> & data;
+};
+
 template<typename data_type>
 struct view_accessor
 {
@@ -71,6 +105,11 @@ int main(int argc, char ** argv)
     
     {
         view_accessor<int> acc(device_data);
+        measure_time<int>(size, seed, acc);
+    }
+
+    {
+        copy_accessor<int> acc(device_data);
         measure_time<int>(size, seed, acc);
     }
 
