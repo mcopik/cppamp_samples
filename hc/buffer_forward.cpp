@@ -123,7 +123,7 @@ namespace pass_as_view_wrapper_ref
         wrapper(array_wrapper<T> * ptr) : 
             ptr(*ptr) {}
 
-        T & operator[](uint64_t pos_)
+        T & operator[](uint64_t pos_) const
         {
             return ptr[pos_];
         }
@@ -165,6 +165,9 @@ namespace pass_as_view_wrapper_ref
  * before capturing in kernel - dereference struct B and
  * copy array_view to launch function.
  *
+ * In the gpu code recreate wrapper - works like a pointer
+ * and we want to save the position for future usage.
+ *
  * Works!
  */
 namespace pass_as_view_wrapper_ptr_dereference
@@ -186,11 +189,11 @@ namespace pass_as_view_wrapper_ptr_dereference
     struct wrapper
     {
         array_wrapper<T> * ptr;
-        
+        uint64_t pos; 
         wrapper(array_wrapper<T> * ptr) : 
-            ptr(ptr) {}
+            ptr(ptr), pos(0) {}
         
-        T & operator[](uint64_t pos_)
+        T & operator[](uint64_t pos_) const
         {
             return (*ptr)[pos_];
         }
@@ -203,9 +206,21 @@ namespace pass_as_view_wrapper_ptr_dereference
     } 
 
     template<typename T>
-    amp::array_view<T>  dereference_view(const wrapper<T> & t)
+    std::tuple<amp::array_view<T>, uint64_t>  dereference_view(const wrapper<T> & t)
     {
-       return t.ptr->ptr;
+       return std::make_tuple(t.ptr->ptr, t.pos);
+    } 
+    
+    template<typename T>
+    const T & reference_view(const T & t) [[hc]]
+    {
+       return t;
+    } 
+
+    template<typename T>
+    const amp::array_view<T> & reference_view(const std::tuple<amp::array_view<T>, uint64_t> & t) [[hc]]
+    {
+        return std::get<0>(t);
     } 
     
     template<typename F, typename... Args>
@@ -213,7 +228,7 @@ namespace pass_as_view_wrapper_ptr_dereference
     {
         amp::parallel_for_each(acc_view, amp::extent<1>(threads).tile(local_threads),
             [=](amp::tiled_index<1> idx) [[hc]] {
-                f(idx.global[0], args...);
+                f(idx.global[0], reference_view(args)...);
             }
         );
     }
@@ -228,7 +243,7 @@ namespace pass_as_view_wrapper_ptr_dereference
     void destruct(amp::accelerator_view & acc_view, int threads, wrapper<T> pointer)
     {
         pass_as_view_wrapper_ptr_dereference::launch(acc_view, threads,5, 
-            [](const int idx, const amp::array_view<T> & p) [[hc]] {
+            [](const int idx, const hc::array_view<T> & p) [[hc]] {
                 p[ idx ].~T();
             }, pointer);
     }
@@ -237,7 +252,7 @@ namespace pass_as_view_wrapper_ptr_dereference
     void construct(amp::accelerator_view & acc_view, int threads, wrapper<T> pointer, const Args &... args)
     {
         pass_as_view_wrapper_ptr_dereference::launch(acc_view, threads, 1,
-            [](const int idx, const amp::array_view<T> & p, Args const &... args) [[hc]] {
+            [](const int idx, const hc::array_view<T> & p, Args const &... args) [[hc]] {
                 new (&p[ idx ]) T(args...);
                 p[ idx ].x()++;
             }, pointer, args...);
@@ -330,7 +345,7 @@ namespace pass_as_view_wrapper_val
     {
         array_wrapper<T> ptr;
         
-        wrapper(amp::array<T> * ptr) : ptr(ptr) {}
+        wrapper(array_wrapper<T> * ptr) : ptr(*ptr) {}
 
         T & operator[](uint64_t pos_)
         {
@@ -504,7 +519,7 @@ int main(int argc, char ** argv)
     //    pass_as_view_wrapper_ref::destruct(acc_view,size, p);
     //    acc_view.wait(); 
     //} 
-    namespace test_implementation = pass_as_view_wrapper_ptr;
+    namespace test_implementation = pass_as_view_wrapper_ptr_dereference;
     {
         test_implementation::array_wrapper<specific_data> wrapper(device_data); 
         test_implementation::wrapper<specific_data> p(&wrapper);
